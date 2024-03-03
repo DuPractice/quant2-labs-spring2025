@@ -1,0 +1,184 @@
+---
+title: "Lab 5: Appendix"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-03-01"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(ggdag)
+```
+
+
+## Matching: MatchIt
+
+We will use Lalonde's data on the evaluation of the National Supported Work program to demonstrate MatchIt's capabilities.
+
+```{r}
+library("MatchIt")
+library("broom")
+library(estimatr)
+data("lalonde")
+head(lalonde)
+```
+
+The statistical quantity of interest is the causal effect of the treatment (`treat`) on 1978 earnings (`re78`). The other variables are pre-treatment covariates. See `?lalonde` for more information on this dataset. In particular, the analysis is concerned with the marginal, total effect of the treatment for those who actually received the treatment.
+
+The planning phase of a matching analysis involves selecting the type of effect to be estimated, selecting the target population to which the treatment effect is to generalize, and selecting the covariates for which balance is required for an unbiased estimate of the treatment effect. After planning and prior to matching, it can be a good idea to view the initial imbalance in one's data that matching is attempting to eliminate. We can do this using the code below:
+
+```{r}
+m.out0 <- matchit(treat ~ age + educ + race + married + 
+                   nodegree + re74 + re75, data = lalonde,
+                 method = NULL, distance = "glm")
+```
+
+```{r}
+# Checking balance prior to matching
+summary(m.out0)
+```
+
+```{r}
+plot(m.out0, type = "qq", interactive = FALSE,
+     which.xs = c("age", "married", "re75"))
+```
+
+We can see severe imbalances as measured by the standardized mean differences (`Std. Mean Diff.`), variance ratios (`Var. Ratio`), and empirical cumulative density function (eCDF) statistics. Values of standardized mean differences and eCDF statistics close to zero and values of variance ratios close to one indicate good balance, and here many of them are far from their ideal values.
+
+Now, matching can be performed. There are several different classes and methods of matching. You can use vignette("matching-methods") to know more.
+
+Now, we will perform 1:1 nearest neighbor (NN) matching on the propensity score, which is appropriate for estimating the ATT. One by one, each treated unit is paired with an available control unit that has the closest propensity score to it. Any remaining control units are left unmatched and excluded from further analysis.
+
+```{r}
+# 1:1 NN PS matching w/o replacement
+m.out1 <- matchit(treat ~ age + educ + race + married + 
+                   nodegree + re74 + re75, data = lalonde,
+                 method = "nearest", distance = "glm")
+```
+
+We use the same syntax as before, but this time specify `method = "nearest"` to implement nearest neighbor matching, again using a logistic regression propensity score. Many other arguments are available for tuning the matching method and method of propensity score estimation.
+
+```{r}
+m.out1
+```
+
+The key components of the `m.out1` object are `weights` (the computed matching weights), `subclass` (matching pair membership), `distance` (the estimated propensity score), and `match.matrix` (which control units are matched to each treated unit).
+
+```{r}
+# Checking balance after NN matching
+summary(m.out1, un = FALSE)
+```
+
+To assess the quality of the resulting matches numerically, we can use the `summary()` function on `m.out1` as before. Here we set `un = FALSE` to suppress display of the balance before matching for brevity and because we already saw it. (Leaving it as `TRUE`, its default, would display balance both before and after matching.)
+
+Although balance has improved for some covariates, in general balance is still quite poor, indicating that nearest neighbor propensity score matching is not sufficient for removing confounding in this dataset. The final column, `Std. Pair Diff`, displays the average absolute within-pair difference of each covariate. When these values are small, better balance is typically achieved and estimated effects are more robust to misspecification of the outcome model
+
+```{r}
+plot(m.out1, type = "qq", interactive = FALSE,
+     which.xs = c("age", "married", "re75"))
+plot(summary(m.out1))
+plot(m.out1, type = "jitter", interactive = FALSE)
+```
+
+With exact matching, a complete cross of the covariates is used to form subclasses defined by each combination of the covariate levels. Any subclass that doesn't contain both treated and control units is discarded, leaving only subclasses containing treatment and control units that are exactly equal on the included covariates. The benefits of exact matching are that confounding due to the covariates included is completely eliminated, regardless of the functional form of the treatment or outcome models. The problem is that typically many units will be discarded, sometimes dramatically reducing precision and changing the target population of inference.
+
+```{r}
+# Exact Matching
+m.out2 <- matchit(treat ~ age + educ + race + married + 
+                   nodegree + re74 + re75, data = lalonde,
+                  method = "exact", distance = "glm")
+```
+
+```{r}
+m.out2
+```
+
+```{r}
+summary(m.out2)
+```
+
+```{r}
+plot(m.out2, type = "qq", interactive = FALSE,
+     which.xs = c("age", "married", "re75"))
+plot(summary(m.out2))
+```
+
+Matching using exact attribute for some variables
+
+```{r}
+m.out3 <- matchit(treat ~ age + educ + race + nodegree +
+                   married + re74 + re75, data = lalonde, replace = TRUE,
+                   distance = "glm",
+                   exact = ~ married + race)
+
+```
+
+```{r}
+m.out3
+```
+
+```{r}
+summary(m.out3, un = TRUE)
+```
+
+```{r}
+plot(m.out3, type = "qq", interactive = FALSE,
+     which.xs = c("age", "married", "re75"))
+plot(summary(m.out3))
+```
+
+Coarsened exact matching (CEM) is a form of stratum matching that involves first coarsening the covariates by creating bins and then performing exact matching on the new coarsened versions of the covariates.The degree and method of coarsening can be controlled by the user to manage the trade-off between exact and approximate balancing. When doing CEM, there are three mains steps:
+
+1.  Coarsen the data to reduce the level of granularity. This means binning numerical values and/or grouping categorical values.
+
+2.  Apply an exact matching on the coarsened data to find comparable control and treatment groups. This means finding all combinations of the covariates that have at least one control and one treatment record and keep records that belong to the combinations and drop the rest. Each combination is referred to as *stratum*.
+
+3.  Estimate the causal impact using the matched data.
+
+Let's assume we wanted to understand the causal impact of `treat` on `re78` using this method
+
+```{r}
+m.out4 <- matchit(treat ~ age + educ + race + married + 
+                   nodegree + re74 + re75, data = lalonde, 
+                     method = 'cem', estimand = 'ATE')
+
+summary(m.out4, un=FALSE)
+```
+
+```{r}
+plot(m.out4, type = "qq", interactive = FALSE,
+     which.xs = c("age", "married", "re75"))
+plot(summary(m.out3))
+```
+
+```{r}
+m.data1 <- match.data(m.out1)
+
+head(m.data1)
+
+tidy(lm_robust(re78 ~ treat + age + educ + race + married + nodegree + 
+             re74 + re75, data = m.data1))
+```
+
+```{r}
+m.data3 <- match.data(m.out3)
+
+head(m.data3)
+tidy(lm_robust(re78 ~ treat + age + educ + race + married + nodegree + 
+             re74 + re75, data = m.data3))
+
+```
+
+```{r}
+m.data4 <- match.data(m.out4)
+
+head(m.data4)
+tidy(lm_robust(re78 ~ treat + age + educ + race + married + nodegree + 
+             re74 + re75, data = m.data4))
+
+```
