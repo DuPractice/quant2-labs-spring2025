@@ -14,4 +14,4 @@ Please make sure you have:
 
 #### Lectures
 
-Lecture material can be found [here] (https://cyrussamii.com/?page_id=3893). 
+Lecture material can be found [here](https://cyrussamii.com/?page_id=3893). 
