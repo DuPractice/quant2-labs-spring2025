@@ -1,6 +1,6 @@
-### POL-GA 1015 Intro to Quantitative Political Analysis II Spring 2024
+### POL-GA 1251 Intro to Quantitative Political Analysis II Spring 2024
 
-Materials for the lab component of  DS-GA 1251 Intro to Quantitative Political Analysis II (Spring 2024) can be found here. 
+Materials for the lab component of  POL-GA 1251 Intro to Quantitative Political Analysis II (Spring 2024) can be found here. 
 
 Lab is on Fridays from 2:00-4:00 pm in Room 435 at the 19 West 4th Street
 
