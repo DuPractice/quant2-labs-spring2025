@@ -1,0 +1,35 @@
+---
+title: "Quant II - Lab 1"
+author: ""
+output: pdf_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Section Heading
+
+## Subsection Heading
+- Some text `monospace font` 
+- In bullet points
+- *Italics*
+- **Bold**
+
+\begin{align}
+E = mc^2
+\end{align}
+
+```{r}
+# A code chunk
+1 + 1
+```
+
+You can also make code chunks inline like this: 2+2 = `r 2+2`.
+
+```{r message=F, warning=F}
+# You can adjust how the code chunks behave with chunk options.
+# See https://yihui.org/knitr/options/ for more information
+library(tidyverse)
+library(here)
+df <- read_tsv(here('lab1/thescience.tsv'))
+```

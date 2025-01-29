@@ -1,0 +1,51 @@
+---
+title: "Quant II"
+subtitle: "Lab 1"
+author: "Sylvan Zheng"
+date: "2024-01-30"
+output: 
+  beamer_presentation:
+    theme: "CambridgeUS"
+    colortheme: "dolphin"
+    fonttheme: "structurebold"
+---
+
+
+# Hi!
+> - Sylvan Zheng, $4^{th}$ year PhD.
+> - Fields: American Politics, Methods
+> - Email: [saz310@nyu.edu](mailto:saz310@nyu.edu)
+> - Office: 421 
+
+# Logistics 
+- Lab materials will be posted on the lab's GitHub repo: [https://github.com/squidgetx/quant2-labs-spring2025](https://github.com/squidgetx/quant2-labs-spring2025)
+- Materials for future labs subject to change
+
+# The purpose of lab
+> - Build intuition for lecture material
+> - More simulation / empirical and less analytical
+> - Get familiar with professional tools for conducting/communicating research (eg, R and RMarkdown)  
+> - Space to ask questions both conceptual and practical
+
+# Today's Lab
+> - **Getting set up with RMarkdown**
+> - **Potential outcomes and ATES**
+> - **Sampling and Estimators**
+> - ~~DAGs~~ (we will get more into DAGs in future sessions)
+
+# RMarkdown
+> - Tool that combines R, LaTeX, and Markdown 
+> - Create **reproducible** documents 
+> - Combine text, code, and analysis results
+> - Your homework must be prepared using RMarkdown or similar tools
+
+# Package: Here
+> - [KVR Example]
+> - Use the Here package
+> - Works either with `.Rproj` or `.herefile`
+
+# Demonstration/In-Lab Assignment
+- [See the `lab1.Rmd/lab1.pdf` in the Github]
+
+
+
