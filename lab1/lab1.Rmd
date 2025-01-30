@@ -46,16 +46,41 @@ df %>% select(y0, y1, t, y) %>% tail
 mean(filter(df, t == 1)$y) - mean(filter(df, t == 0)$y)
 ```
 
-- Calculate the true global treatment effect 
+- Calculate the true global average treatment effect 
 ```{r}
 mean(df$y1 - df$y0)
 ```
 
 - Explain why they are different. Show this using R.
 ```{r}
+# Selection bias because there is a difference in the potential outcomes
+# of the treatment vs. control
+mean(filter(df, t == 1)$y0) - mean(filter(df, t == 0)$y0)
+
+# We can see this graphically by plotting the data
+df %>% ggplot(aes(x =t , y = y0)) + geom_point()
+
+# Or we can observe this by noting that treatment and potential outcomes
+# are correlated
+cor(df$t, df$y0)
 ```
 
 - What is the ATE vs the ATC and ATT? How would we calculate these from the science?
+
+```{r}
+# ATE (Average treatment effect - for everyone)
+mean(df$y1 - df$y0)
+## Same thing with fancy code
+with(df, mean(y1) - mean(y0))
+
+# ATC (Average treatment on control)
+mean(filter(df, t==0)$y1 - filter(df, t==0)$y0)
+with(filter(df, t==0), mean(y1) - mean(y0))
+
+# ATT (Average treatment on treated)
+mean(filter(df, t==1)$y1 - filter(df, t==1)$y0)
+with(filter(df, t==1), mean(y1) - mean(y0))
+```
 
 # In-Lab Assignment
 
@@ -64,8 +89,21 @@ Do the next part in pairs. Prepare your work using RMarkdown.
 ## Fixing the ATE estimation
 
 - You get to play omnipotent being! Create an alternate universe (ie, a new treatment assignment and new outcome variable) such that the difference in means between the treated and the untreated can be reliably estimated.
-- Estimate the difference and means and compare it to the true effect.
+- Estimate the difference in means and compare it to the true effect.
 - Are they different? Why/How? 
+
+```{r}
+# Assign a random treatment
+df$treat <- runif(nrow(df), 0, 1) > 0.5
+df$outcome <- with(
+  df,
+  ifelse(treat, y1, y0)
+)
+# The difference in means is closer to 1 now
+with(df, mean(y1-y0))
+mean(filter(df, treat==1)$y0) - mean(filter(df, treat==0)$y0)
+
+```
 
 
 ## Bias and Consistency of Estimators 
@@ -77,10 +115,12 @@ my.estimator <- function(data) {
 }
 
 N <- 5
+
 mu <- 0
 sigma <- 1
 
 some.data <- rnorm(N, mu, sigma)
+some.data
 my.estimator(some.data)
 
 some.data <- rnorm(N, mu, sigma)
@@ -105,8 +145,22 @@ mean(estimates)
 
 Is this estimator *consistent*?
 
+```{r}
+N <- 100000
+estimates <- c()
+for(i in 1:1000) {
+  some.data <- rnorm(N, mu, sigma)
+  e <- my.estimator(some.data)
+  estimates <- c(estimates, e)
+}
+hist(estimates)
+mean(estimates)
+```
+
 Is this estimator *asymptotically biased*?
 How would we modify the above code to determine this?
+
+## in-lab section
 
 Now compare for the following estimator:
 
@@ -116,22 +170,27 @@ my.estimator.2 <- function(data) {
 }
 ```
 
-Write a function that pulls draws 1000 samples of size N
+Write a function that pulls 1000 draws of samples of size N
 from a normal distribution with mean `mu` and sd `sigma`
-and estimates the population mean using the above estimator.
+and estimates the population mean using the above estimator (my.estimator.2).
 
-Show a histogram or density plot of a few different values of N.
-Does the results suggest consistency? Unbiasedness? Asymptotic unbiasedness?
+https://nyu.zoom.us/j/7610081729
+
+Show a histogram or density plot for a few different values of N.
+Do the results suggest consistency? Unbiasedness? Asymptotic unbiasedness?
 
 ```{r}
-my.estimator.2 <- function(data) {
-  mean(data)
+get_estimates <- function(N) {
+  estimates <- c()
+  for(i in 1:1000) {
+    some.data <- rnorm(N, mu, sigma)
+    e <- my.estimator.2(some.data)
+    estimates <- c(estimates, e)
+  }
+  estimates
 }
+
+hist(get_estimates(10))
+hist(get_estimates(100))
+hist(get_estimates(1000))
 ```
-
-Write a function that pulls draws 1000 samples of size N
-from a normal distribution with mean `mu` and sd `sigma`
-and estimates the population mean using the above estimator.
-
-Show a histogram or density plot of a few different values of N.
-Does the results suggest consistency? Unbiasedness? Asymptotic unbiasedness?
