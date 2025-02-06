@@ -313,9 +313,10 @@ sd(wb3.estimates$estimate)
 
 # Wild Cluster via Sandwich
 
+> - `fwildclusterboot` seems to have a broken dependency 
+
 ```{r}
-library(sandwich)
-vcv.wild <- vcovBS(
+vcv.wild <- sandwich::vcovBS(
     model,
     type = "wild-rademacher", cluster = ~g, R = 1000
 )
