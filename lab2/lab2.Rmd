@@ -1,0 +1,385 @@
+---
+title: "Quant 2, Lab 2"
+subtitle: "Bootstrapping & Cluster Analysis"
+author: "Sylvan Zheng"
+output: beamer_presentation
+---
+
+```{r include=F}
+pacman::p_load(tidyverse)
+pacman::p_load(purrr)
+pacman::p_load(broom)
+pacman::p_load(parallel)
+pacman::p_load(fixest)
+pacman::p_load(estimatr)
+pacman::p_load(extraDistr)
+pacman::p_load(lmtest)
+pacman::p_load(sandwich)
+pacman::p_load(knitr)
+knitr::opts_chunk$set(out.width = "75%", fig.align = "center")
+def.chunk.hook <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+    x <- def.chunk.hook(x, options)
+    paste0("\n \\", "footnotesize", "\n\n", x, "\n\n \\normalsize")
+})
+theme_bare <- theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks.margin = unit(c(0, 0, 0, 0), "lines"),
+    legend.position = "none",
+    panel.border = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+)
+```
+
+# Outline
+
+> - Tip of the week: Pacman 
+> - Bootstrapping 
+> - Clustered analysis 
+> - Bootstrapping x Clustered analysis 
+> - Intro to git (if we have time)
+
+# Pacman
+
+> - R Package for package management
+> - `pacman::p_load`: loads or installs automatically
+> - `pacman::p_install_version`: installs a specific version
+
+
+# Bootstrapping
+
+> - I heard you like samples
+> - So I made a sample of samples from a sample
+
+# Bootstrapping
+
+![](bootstrap-scheme.png)
+
+# Bootstrapping 
+
+> - Get confidence intervals for estimators we can't (or don't want to) derive variances for 
+
+# Bootstrap Example: Quantile CIs
+
+> - Let's say we are interested in estimating the 90th percentile value
+
+```{r, include=F}
+mysterious_dgp <- rgpd
+```
+
+```{r}
+N <- 1000
+data <- mysterious_dgp(N)
+density(data) %>% plot()
+```
+
+# Bootstrap Example: Quantile CIs
+
+> - We can estimate the sample 90th quantile...
+> - But how would we calculate the confidence interval on this estimate?
+
+```{r}
+quantile(data, 0.9)
+```
+
+
+# Bootstrap Example: Quantile CIs
+
+```{r}
+N.bs <- 10000
+# Draw 10K samples from our data with replacement
+sample.of.samples <- map(1:N.bs, \(x) sample(data, N, replace = T))
+
+# Calculate the p90 for each sample
+p90s <- map(sample.of.samples, \(x) quantile(x, 0.9)) %>% unlist()
+hist(p90s)
+```
+
+# Bootstrap Example: Quantile CIs
+
+> - Estimate the CI with the bootstrap sample statistics
+
+```{r}
+quantile(p90s, c(0.025, 0.975))
+```
+
+# Just for comparison...
+
+```{r}
+samples <- map(1:N.bs, \(x) mysterious_dgp(N))
+
+true.p90s <- map(samples, \(x) quantile(x, 0.9)) %>% unlist()
+
+quantile(true.p90s, c(0.025, 0.975))
+```
+
+> - Bias corrected and/or studentized bootstrapping are also options
+
+# Bootstrap validity is also asymptotic
+
+```{r, echo=F}
+N.bs <- 2000
+get_bs_CI <- function(N) {
+    data <- mysterious_dgp(N)
+    mclapply(1:N.bs, \(x) sample(data, N, replace = T) %>% quantile(0.9), mc.cores = 8) %>%
+        unlist() %>%
+        quantile(c(0.025, 0.975))
+}
+Ns <- seq(100, 20000, 100)
+df <- bind_rows(map(Ns, get_bs_CI))
+df$N <- Ns
+df %>% ggplot(aes(x = N, ymin = `2.5%`, ymax = `97.5%`)) +
+    geom_errorbar(alpha = 0.5) +
+    theme_bw()
+```
+
+
+# Cluster Analysis
+>
+> - Data and treatments often **clustered**
+> - State wide minimum wage policy change
+> - Classroom wide distribution of technology
+> - Etc.
+
+# Cluster simulation
+```{r}
+make_clustered_data <- function(G, N) {
+    g <- sample(1:G, size = N, replace = T)
+    treat.g <- sample(c(0, 1), size = G, replace = T)
+    while (is.na(sd(treat.g))) {
+        treat.g <- sample(c(0, 1), size = G, replace = T)
+    }
+    treat.i <- sapply(g, \(x) treat.g[x])
+    effect.g <- rnorm(1:G)
+    g.i <- sapply(g, \(x) effect.g[x])
+    y <- rnorm(N) + g.i + 0.5 * treat.i
+    data.frame(
+        g = g,
+        treat = treat.i,
+        y = y
+    )
+}
+```
+
+# Cluster simulation
+
+```{r include=F}
+set.seed(123)
+```
+
+```{r, echo=F}
+df <- make_clustered_data(G = 10, N = 100)
+df %>% ggplot(aes(x = g, y = y, color = as.factor(g), shape = as.factor(treat))) +
+    geom_point(position = position_jitter(width = 0.1), size=3) +
+    theme_bare
+```
+
+# Cluster simulation
+```{r}
+model <- lm(y ~ treat, data = df)
+summary(model) %>% tidy()
+```
+
+# Cluster simulation
+
+```{r}
+make_sim <- function(x) {
+    df <- make_clustered_data(G = 10, N = 100)
+    model <- summary(lm(y ~ treat, data = df))$coefficients["treat", ]
+    model
+}
+res <- map(1:100, make_sim) %>%
+    bind_rows() %>%
+    mutate(
+        lo = Estimate - 1.96 * `Std. Error`,
+        hi = Estimate + 1.96 * `Std. Error`,
+        cover = lo < 0.5 & hi > 0.5,
+        i = 1:100
+    )
+```
+
+# Cluster simulation
+ 
+> - Only `r sum(res$cover)`% cover the true value
+
+```{r echo=F}
+res %>% ggplot(aes(x = reorder(i, Estimate), y = Estimate, ymin = lo, ymax = hi, color = cover)) +
+    geom_hline(yintercept = 0.5, lty = 2) +
+    geom_point() +
+    geom_errorbar(width = 0) +
+    theme_bare
+```
+
+# Cluster Bootstrapping: Vanilla
+
+> - Let's try to bootstrap SEs for $\beta_{treat}$
+
+```{r, include=F}
+set.seed(123)
+df <- make_clustered_data(G = 10, N = 100)
+```
+
+```{r}
+vanilla_bootstrap <- function(a) {
+    resampled.data <- df %>% sample_frac(1, replace = T)
+    tidy(lm(y ~ treat, data = resampled.data)) %>% filter(term == "treat")
+}
+vb.results <- map(1:1000, vanilla_bootstrap) %>%
+    bind_rows()
+sd(vb.results$estimate)
+```
+
+# Cluster Bootstrapping: Block / Pair
+
+> - Bootstrap procedure with clustered data needs to reflect the clustered structure 
+> - Block/Pair bootstrapping ressamples at the **cluster** level
+
+```{r include=F}
+set.seed(123)
+n_clusters <- length(unique(df$g))
+```
+
+```{r}
+get_block_bs_sample <- function(df) {
+    sample(size = n_clusters, df$g, replace = T) %>%
+        map(\(x) filter(df, g == x)) %>%
+        bind_rows()
+}
+```
+
+# Cluster Bootstrapping: Block / Pair
+
+```{r}
+bb.estimates <- map(1:1001, \(a) {
+    resampled.data <- get_block_bs_sample(df)
+    tidy(lm(y ~ treat, data = resampled.data)) %>% filter(term == "treat")
+}) %>%
+    bind_rows() %>%
+    .$estimate
+```
+
+# Cluster Bootstrapping: Block / Pair
+
+```{r}
+sd(bb.estimates)
+```
+
+# Cluster Bootstrapping: Block / Pair
+
+```{r include=F}
+set.seed(125)
+table(get_block_bs_sample(df)$treat)
+table(get_block_bs_sample(df)$treat)
+table(get_block_bs_sample(df)$treat)
+```
+```{r}
+table(get_block_bs_sample(df)$treat)
+table(get_block_bs_sample(df)$treat)
+```
+
+# Cluster Bootstrapping: Wild
+
+> - Let's not draw conventional bootstrap samples
+> - Instead, **randomize the sign of the residual** at the **cluster level**
+> - Then, construct `y_star = y_pred + randomized_residual` and estimate `y_star ~ treat`
+> - Do this `N_boot` times
+
+# Cluster Bootstrapping: Wild
+
+```{r}
+model <- lm(y ~ treat, df)
+df$y_pred <- predict(model, df)
+df$residuals <- df$y - df$y_pred
+wild_bootstrap_3 <- function(a) {
+    flip <- sample(c(-1, 1), n_clusters, replace = T)
+    bs.resid.sign <- sapply(df$g, \(x) flip[x])
+    df$y_star <- df$y_pred + df$residuals * bs.resid.sign
+
+    tidy(lm(y_star ~ treat, data = df)) %>% filter(term == "treat")
+}
+wb3.estimates <- lapply(1:2000, wild_bootstrap_3) %>% bind_rows()
+```
+
+# Cluster Bootstrapping: Wild
+
+```{r}
+sd(wb3.estimates$estimate)
+```
+
+# Wild Cluster via Sandwich
+
+```{r}
+library(sandwich)
+vcv.wild <- vcovBS(
+    model,
+    type = "wild-rademacher", cluster = ~g, R = 1000
+)
+coeftest(model, vcv.wild)
+```
+
+
+# Cluster Robust SEs with fixest, estimatr
+```{r}
+fixest::feols(y ~ treat, data = df, cluster = ~g)
+estimatr::lm_robust(y ~ treat, data = df, cluster = g)
+```
+
+# Coverage test: wild
+
+```{r, echo=F}
+wild_sim <- function(x) {
+    df <- make_clustered_data(G = 10, N = 100)
+    model <- lm(y ~ treat, df)
+    vcv.wild <- vcovBS(model, type = "wild-rademacher", cluster = ~g, R = 1000)
+    coeftest(model, vcv.wild)[2, ]
+}
+conduct_sims <- function(simfunc, subtitle, N) {
+    res <- map(1:N, simfunc) %>%
+        bind_rows() %>%
+        mutate(
+            lo = Estimate - 1.96 * `Std. Error`,
+            hi = Estimate + 1.96 * `Std. Error`,
+            cover = lo < 0.5 & hi > 0.5,
+            i = 1:N
+        )
+    coverage <- sum(res$cover, na.rm = T) / sum(!is.na(res$cover)) * 100
+    res %>% ggplot(aes(x = reorder(i, Estimate), y = Estimate, ymin = lo, ymax = hi, color = cover)) +
+        geom_hline(yintercept = 0.5, lty = 2) +
+        geom_point() +
+        geom_errorbar(width = 0) +
+        labs(title = paste(subtitle, "Coverage:", coverage, "%")) +
+        theme_bare
+}
+```
+
+```{r}
+conduct_sims(wild_sim, "Wild Bootstrap", 200)
+```
+
+# Coverage test: estimatr
+```{r, echo=F}
+estimatr_sim <- function(x) {
+    df <- make_clustered_data(G = 10, N = 100)
+    model <- lm_robust(y ~ treat, df, cluster = g) %>% tidy()
+    model %>%
+        filter(term == "treat") %>%
+        rename(
+            Estimate = estimate,
+            `Std. Error` = std.error
+        )
+}
+```
+
+```{r}
+conduct_sims(estimatr_sim, "Estimatr", 200)
+```
+
+# Git intro
+
+> - Source (ie, code and source) management tool
+> - Mac/Linux: Check if installed with `git --version` 
+> - `git clone` and `git pull` easily sync eg, lab materials to your local computer
