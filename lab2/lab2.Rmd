@@ -287,6 +287,7 @@ table(get_block_bs_sample(df)$treat)
 > - Instead, **randomize the sign of the residual** at the **cluster level**
 > - Then, construct `y_star = y_pred + randomized_residual` and estimate `y_star ~ treat`
 > - Do this `N_boot` times
+> - Lab activity: implement in pairs using `wild_bs.R` as a starting template
 
 # Cluster Bootstrapping: Wild
 
