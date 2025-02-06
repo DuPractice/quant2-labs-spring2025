@@ -387,3 +387,4 @@ conduct_sims(estimatr_sim, "Estimatr", 200)
 > - `git clone` and `git pull` easily sync eg, lab materials to your local computer
 > - `git add` and `git commit` stage and commit changes
 > - `git stash` undo non-commited changes
+> - `git init` create new project

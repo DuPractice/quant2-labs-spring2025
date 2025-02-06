@@ -19,6 +19,8 @@ summary(model)
 df$y_pred <- predict(model, df)
 df$residuals <- df$y - df$y_pred
 
+# Making some changes that I don't like
+
 # Implement wild bootstrap to estimate the SE of \beta_(treat)
 # given the observed data `df`
 # Residual sign is randomized at the cluster level (df$g)
