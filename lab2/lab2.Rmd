@@ -384,3 +384,5 @@ conduct_sims(estimatr_sim, "Estimatr", 200)
 > - Source (ie, code and source) management tool
 > - Mac/Linux: Check if installed with `git --version` 
 > - `git clone` and `git pull` easily sync eg, lab materials to your local computer
+> - `git add` and `git commit` stage and commit changes
+> - `git stash` undo non-commited changes
