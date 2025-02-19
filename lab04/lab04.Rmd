@@ -3,6 +3,8 @@ title: "Quant 2, Lab 4"
 subtitle: "DoubleML: More than you wanted to know"
 ---
 
+# 0: Load the Data
+
 ```{r}
 pacman::p_load(DoubleML)
 pacman::p_load(tidyverse)
@@ -21,7 +23,7 @@ df <- readRDS(here::here("lab04/data.rds"))
 # We are interested in identifying the effect of D on Y
 ```
 
-# Approach 1: multiple regression
+# 1: Multiple Regression
 
 ```{r}
 # This formula takes a vector of integers as input
@@ -34,7 +36,7 @@ make_formula <- function(Xs) {
 }
 
 # For example, if you want to regress Y ~ D + X1 + X2 you can do this
-summary(lm(make_formula(c(1, 2)), data = df))
+summary(lm(make_formula(c(1, 2, 3)), data = df))
 ```
 
 ## Estimate Y ~ D using a few different covariate sets of your choice
@@ -47,7 +49,7 @@ summary(lm(make_formula(c(1, 2)), data = df))
 # ...
 ```
 
-# Single ML
+# 2. Single ML
 
 Okay. Maybe we can use machine learning to help us.
 
@@ -68,7 +70,7 @@ lrner$train(task)
 coef(lrner$model, s="lambda.min")['d',]
 ```
 
-# Double ML By Hand
+# 3. Double ML By Hand
 
 ```{r}
 d.x <- lrn("regr.cv_glmnet", s="lambda.min")
@@ -89,7 +91,7 @@ lm(y.x.resid ~ d.x.resid)
 # This is actually not the best because of overfitting
 ```
 
-# Double ML
+# 4. Double ML Package
 
 ```{r}
 # Make a fresh instance of the learner object
@@ -101,5 +103,12 @@ dmd <- double_ml_data_from_data_frame(df, y_col='y', d_cols='d')
 obj_dml_plr_sim <- DoubleMLPLR$new(dmd, ml_l = ml_l_sim, ml_m = ml_m_sim)
 obj_dml_plr_sim$fit()
 obj_dml_plr_sim$summary()
+
+# Okay, now try with a few different models
+# Can use xgboost or random forest
+# xgboost = lrn("regr.xgboost", eta = 0.1, nrounds = 300)
+
+# randomForest = lrn("regr.ranger", max.depth = 7,
+#                   mtry = 3, min.node.size = 3)
 ```
 

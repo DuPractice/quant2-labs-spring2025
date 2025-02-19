@@ -390,3 +390,9 @@ y.x.resid <- dat$income - y.x$predict_newdata(dat)$response
 ```{r}
 lm(y.x.resid ~ d.x.resid)
 ```
+
+# DML: Lab Activity
+
+> - Work in pairs from `lab04.Rmd`
+> - First two exercises: load the data given in `data.rds` and try to use multiple regression to estimate the effect of $y ~ d + x$. What do we find?
+> - Next three excercises: code is written for you already. through 
