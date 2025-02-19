@@ -1,0 +1,105 @@
+---
+title: "Quant 2, Lab 4"
+subtitle: "DoubleML: More than you wanted to know"
+---
+
+```{r}
+pacman::p_load(DoubleML)
+pacman::p_load(tidyverse)
+pacman::p_load(mlr3)
+# pacman::p_load(ranger)
+# pacman::p_load(xgboost)
+pacman::p_load(mlr3learners)
+
+# Load the data
+df <- readRDS(here::here("lab04/data.rds"))
+
+# How many observations?
+# How many covariates?
+
+# Some covariates are relevant for control. Others might not be.
+# We are interested in identifying the effect of D on Y
+```
+
+# Approach 1: multiple regression
+
+```{r}
+# This formula takes a vector of integers as input
+# and returns a regression formula
+make_formula <- function(Xs) {
+    fmla_str <- lapply(Xs, \(i) paste0("X", i)) %>% paste0(collapse = "+")
+    as.formula(
+        sprintf("y ~ d + %s", fmla_str)
+    )
+}
+
+# For example, if you want to regress Y ~ D + X1 + X2 you can do this
+summary(lm(make_formula(c(1, 2)), data = df))
+```
+
+## Estimate Y ~ D using a few different covariate sets of your choice
+
+1. Collect a few estimates for the effect of D. What do you see?
+2. Try specifications that include a lot of covariates as well as a few. What happens to the standard error of our estimate as the set of covariates increases?
+3. Finally, try a specification that includes every covariate. What happens? Why?
+
+```{r}
+# ...
+```
+
+# Single ML
+
+Okay. Maybe we can use machine learning to help us.
+
+```{r}
+set.seed(123)
+
+# Use the mlr3 library to set up a machine learning workflow
+# The glmnet.cv regression model uses Elastic Net regularization
+lrner <- lrn("regr.cv_glmnet", s="lambda.min")
+
+# Make a "training task" to target Y (outcome)
+task <- as_task_regr(df, target='y')
+
+# Train the model
+lrner$train(task)
+
+# Extract the coefficient for d directly
+coef(lrner$model, s="lambda.min")['d',]
+```
+
+# Double ML By Hand
+
+```{r}
+d.x <- lrn("regr.cv_glmnet", s="lambda.min")
+y.x <- lrn("regr.cv_glmnet", s="lambda.min")
+# Train d ~ all x's, not including y
+d.x.task <- as_task_regr(df %>% select(!c('y')), target='d')
+# Train y ~ all x's, not including d
+y.x.task <- as_task_regr(df %>% select(!c('d')), target='y')
+d.x$train(d.x.task)
+y.x$train(y.x.task)
+
+d.x.resid <- df$d - d.x$predict_newdata(df)$response
+y.x.resid <- df$y - y.x$predict_newdata(df)$response
+
+# Regress residuals on residuals FWL style
+lm(y.x.resid ~ d.x.resid)
+
+# This is actually not the best because of overfitting
+```
+
+# Double ML
+
+```{r}
+# Make a fresh instance of the learner object
+ml_l_sim <- lrn("regr.cv_glmnet", s = "lambda.min")
+ml_m_sim <- lrn("regr.cv_glmnet", s = "lambda.min")
+set.seed(3141)
+# Use the double machine learning approach.
+dmd <- double_ml_data_from_data_frame(df, y_col='y', d_cols='d')
+obj_dml_plr_sim <- DoubleMLPLR$new(dmd, ml_l = ml_l_sim, ml_m = ml_m_sim)
+obj_dml_plr_sim$fit()
+obj_dml_plr_sim$summary()
+```
+
