@@ -242,8 +242,8 @@ plot_dag(model, Y = "Wage", D = "Fem", highlight = "Occ")
 > - Should we control for Occupation (`Occ`)?
 > - Let's use simulation to illustrate (`gender_wage_sim.R`)
 > - Suppose the following DGP
->      - `Occ` = -0.1 * `Fem` + $\epsilon_1$
->      - `Wage` = -0.1 * `Fem` + 2 * `Occ` + $\epsilon_2$
+>      - `Occ` = -0.1 * `Fem` + u + $\epsilon_1$
+>      - `Wage` = -0.1 * `Fem` + `Occ` + 2 * u + $\epsilon_2$
 >      - `Fem` ~ Bernoulli(0.5)
 >      - $\epsilon_1, \epsilon_2, u \sim N(0,1)$
 
@@ -330,17 +330,21 @@ etable(
 
 # Post-treatment bias
 
-> Homola, Pereira, and Tavits (2020, APSR) argue that living closer to a Nazi era concentration camp increases modern day far right support.
+> - Homola, Pereira, and Tavits (2020, APSR) argue that living closer to a Nazi era concentration camp increases modern day far right support.
 > - Pepinsky, Goodman, Ziller (2023, APSR) argue that "state-level differences confound the relationship between distance to camps and out-group intolerance"
 >     - They add state level fixed effects and show that the original effect disappears.
 >     - "Länder cannot be posttreatment variables unless we assume that the creation of Länder was caused by their distance from concentration camps."
-> HPT (2024, APSR) rebuttal. "contemporary state fixed effects induce post-treatment bias if any factor (observable or not) that varies across German Länder is a direct or indirect descendant of proximity to concentration camps.""
+> - HPT (2024, APSR) rebuttal. "contemporary state fixed effects induce post-treatment bias if any factor (observable or not) that varies across German Länder is a direct or indirect descendant of proximity to concentration camps.""
 
-# Sensitivity analysis
+# Conclusions 
 
 > - Should we give up on observational regression analysis? Maybe
+>     - Don't control enough => Omitted variable bias
+>     - Control on a collider => Collider bias 
+>     - Control on post treatment => Post treatment bias
+>     - Control on something innocuous => Bias Amplification, sometimes
 > - Always use a DAG and domain knowledge to justify your control strategy
-> - Sensitivity analysis and Double ML can also help 
+> - Sensitivity analysis and Double ML can help, kind of
 >     - (Double ML next week)
 
 # Sensitivity analysis
@@ -361,25 +365,31 @@ library(sensemakr)
 data("darfur")
 darfur.model <- feols(
     peacefactor ~ directlyharmed + female +
-        age + farmer_dar + herder_dar + pastvoted + hhsize_darfur | village,
+        age + farmer_dar + herder_dar + pastvoted + 
+        hhsize_darfur | village,
     data = darfur
 )
 ```
 
 # Sensitivity analysis: Attitudes in Darfur (Hazlett, 2019)
 
+:::: columns
+::: column
+
 > - Specification with lots of controls shows a positive relationship
+
+:::
+::: column
 
 \footnotesize
 ```{r, results='asis', echo=F}
 etable(darfur.model, tex = T, fitstat = c("n"))
 ```
 
-# Sensitivity analysis: Attitudes in Darfur (Hazlett, 2019)
+:::
+::::
 
-> - `sensemakr` package lets us conduct sensitivity analysis **relative to a covariate of choice**
-> - Ex, gender played an important role in exposure to violence: women were specifically targeted
-> - `kd` and `ky` arguments: we investigate a hypothetical confounder **1-3x** as strong as `female`
+# Sensitivity analysis: Attitudes in Darfur (Hazlett, 2019)
 
 ```{r, message=F}
 darfur.sensitivity <- sensemakr(
@@ -390,6 +400,12 @@ darfur.sensitivity <- sensemakr(
     ky = 1:3,
 )
 ```
+
+> - `sensemakr` package lets us conduct sensitivity analysis **relative to a covariate of choice**
+> - Ex, gender played an important role in exposure to violence: women were specifically targeted
+> - `kd` and `ky` arguments: we investigate a hypothetical confounder **1-3x** as strong as `female`
+
+
 
 # Sensitivity Analysis
 
