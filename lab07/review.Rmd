@@ -141,3 +141,69 @@ Next, the unconfounded assumption means that $\Pr[M_i(0) = 1 \mid T_i = 1] = \Pr
     &= \mathbb{E} \left[ Y_i \mid M_i = 1, T_i = 1 \right] \Pr[M_i = 1 \mid T_i = 0] \\
     &\quad + \mathbb{E} \left[ Y_i \mid M_i = 0, T_i = 1 \right] (1 - \Pr[M_i = 1 \mid T_i = 0]).
 \end{align*}
+
+
+# Random Sampling - Variance Derivation
+
+Consider a simple randomized experiment. 
+
+We draw a random sample of units indexed by $i \in {0, 1, ... N}$ from a finite population of size $n$.
+We randomly assign $D \in {0,1}$ and observe $Y_{i,D}$ for each unit.
+$N_1 = \sum_{i=1}^{N} \mathbbm{1}(D_i == 1)$ (the number of units assigned to treatment) and $N_0 = N - N_1 = \sum_{i=1}^{N} \mathbbm{1}(D_i == 0)$ (the number of units assigned to control).
+
+Then, the difference in means estimator $\hat{\rho} = \frac{1}{N_1} \sum_{i=1; D_i=1}^{N} Y_i - \frac{1}{N_0} \sum_{i=1; D_i=0}^{N} Y_i$
+
+There is uncertainty in $\hat{\rho}$ from two sources. 
+One is sampling uncertainty, because we randomly selected our sample from the population. 
+The other is design-based uncertainty, because we randomly assigned treatment outcomes.
+
+Let's derive the total variance $Var(\hat{\rho})$ with respect to both sources of uncertainty.
+
+Applying the ANOVA theorem : \[ Var[\hat{\rho}] = E_S[Var_D[\hat{\rho} | S]] + Var_S[E_D[\hat{\rho} | S]] \]
+
+Let's focus on the second term.
+The second term is the random-sample variance of the expected value of $\hat{\rho}$ over different treatment assignments.
+Given a fixed sample $S$, this is equivalent to the sample ATE.
+
+
+\[  = E_S[Var_D[\hat{\rho} | S]] + Var_S[\frac{1}{N}\sum_{i=1}^{N} Y_{i1} - Y_{i0} ] \]
+
+\[  = E_S[Var_D[\hat{\rho} | S]] + Var_S[\frac{1}{N}\sum_{i=1}^{N} \rho_i ] \]
+
+\[  = E_S[Var_D[\hat{\rho} | S]] + \frac{1}{N^2}Var_S[\sum_{i=1}^{N} \rho_i ] \]
+
+Because the $\rho_i$ are independent (SUTVA), the variance of sums is the same as the sum of variances:
+
+\[  = E_S[Var_D[\hat{\rho} | S]] + \frac{1}{N^2}\sum_{i=1}^{N} Var_S[\rho_i]  \]
+
+Then, define $\sigma_{\rho}^2 = \frac{1}{N} \sum_{i=1}^{N} Var_S[\rho_i]$. This is the average population variance of $\rho$.
+
+\[  = E_S[Var_D[\hat{\rho} | S]] + \frac{1}{N} \sigma_{\rho}^2 \]
+
+Note that this term is not identified, since we can't actually observe any $\rho_i = Y_{i1} - Y_{i0}$.
+
+Ok. Now for the first term which is the expected value of $Var_D[\hat{\rho} | S]$ over the random sampling process.
+First, we can just think about $Var_D[\hat{\rho} | S]$ (ie, with a fixed sample $S$).
+
+\[ Var_D[\hat{\rho} | S] = Var_D[\bar{Y_1} - \bar{Y_0}] = Var_D[\bar{Y_1}] + Var_D[\bar{Y_0}] - 2Cov(\bar{Y_1}, \bar{Y_0}) \]
+
+\[ = \frac{1}{N_1} s_{Y1}^2 * \frac{N - N_1}{N}  + \frac{1}{N_0} s_{Y0}^2 * \frac{N - N_0}{N} - 2[- s_{Y1, Y0} / N]\]
+
+Ok what's going on here? $s_{Y1}^2$ is the sample variance of $Y1$ and $s_{Y1, Y0}$ is the sample covariance.
+
+The population correction factors $\frac{N - N_1}{N}$ arise because of a finite population correction. "Complete
+random assignment is like SRSWOR for potential outcomes"
+
+\[ = \frac{1}{N_1} s_{Y1}^2 -  \frac{1}{N} s_{Y1}^2  + \frac{1}{N_0} s_{Y0}^2 - \frac{1}{N} s_{Y0}^2 - 2[- s_{Y1, Y0} / N]\]
+
+\[ = \frac{1}{N_1} s_{Y1}^2   + \frac{1}{N_0} s_{Y0}^2 - \frac{1}{N} \left(   s_{Y1}^2 + s_{Y0}^2 - 2[s_{Y1, Y0} ] \right) \]
+
+\[ = \frac{1}{N_1} s_{Y1}^2   + \frac{1}{N_0} s_{Y0}^2 - \frac{1}{N} s_{\rho}^2 \]
+
+Then, taking expectations over the random sampling:
+
+\[ = \frac{1}{N_1} \sigma_{Y1}^2   + \frac{1}{N_0} \sigma_{Y0}^2 - \frac{1}{N} \sigma_{\rho}^2 \]
+
+Then, the last term cancels out with what we derived earlier and the total variance is:
+
+\[ = \frac{1}{N_1} \sigma_{Y1}^2   + \frac{1}{N_0} \sigma_{Y0}^2 \]
