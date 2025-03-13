@@ -1,0 +1,143 @@
+---
+title: "Quant 2, Week 7: Midterm Review"
+author: "Sylvan Zheng"
+output: 'pdf_document'
+header-includes:
+    - \usepackage{bbm}
+    - \usepackage{amsmath}
+---
+
+# 1 HW2 FWL Application
+
+![](hw2-2.png)
+
+- We know that (i)-(iii) are unbiased by DAG logic. 
+- But, we can also prove this formally using FWL and covariance algebra.
+- Why does this work? Given the structural equations and the knowledge that the $\epsilon \sim N(0,1)$, it's not too hard to calculate covariances and variances
+- For example, in system (i) the variance of V is 1 and the variance of D is $Var(X + \epsilon_d) = 2$ (the sum because X and $\epsilon_d$ are independent).
+
+## Exercise (i) 
+
+- FWL estimate of OLS coefficient 
+    $\beta = Cov(\tilde{D}, \tilde{Y}) / Var(\tilde{D})$
+- $\tilde{D} = \epsilon_d$
+- $\tilde{Y} = \epsilon_d + V + \epsilon_y$
+- $\beta = \frac{Cov(\epsilon_d, \epsilon_d + V + \epsilon_y)}{Var(\epsilon_d)}$
+- $= \frac{Cov(\epsilon_d, \epsilon_d) + Cov(\epsilon_d, V) + Cov(\epsilon_d, \epsilon_y)}{Var(\epsilon_d)}$
+- $= \frac{Var(\epsilon_d) + 0 + 0}{Var(\epsilon_d)} = 1$
+
+## Exercise (iv)
+
+For more complex cases, writing $\tilde(D)$ is not so easy. 
+In these cases, better to express it formally as 
+$\tilde(D) = D - \delta_0 - \delta_1 X$ (where $\delta$ are the OLS estimates from regressing D on X). 
+Then, we also know that $\delta_1 = \frac{Cov(X, D)}{Var(X)}$.
+Similarly, we can write $\tilde{Y} = Y - \gamma_0 - \gamma_1 X$ where $\gamma_1 = \frac{Cov(Y, X)}{Var(X)}$.
+
+- $\tilde{D} = D - \delta_0 - \delta_1 X$
+- $\tilde{Y} = Y - \gamma_0 - \gamma_1 X$
+- $\beta = \frac{Cov(\tilde{Y}, D - \delta_0 - \delta_1 X)}{Var(D - \delta_0 - \delta_1 X)}$
+
+We can throw out the constants $\delta_0$ and expand the numerator:
+
+- $\beta = \frac{Cov(\tilde{Y}, D)  -  Cov(\tilde{Y}, \delta_1 X)}{Var(D - \delta_1 X)}$
+
+We know that $\tilde{Y}$ is uncorrelated with X:
+
+- $\beta = \frac{Cov(\tilde{Y}, D)  }{Var(D - \delta_1 X)} = \frac{Cov(Y - \gamma_1 X, D)  }{Var(D - \delta_1 X)} = \frac{Cov(Y,D) - \gamma_1 Cov( X, D)  }{Var(D - \delta_1 X)}$
+
+Then expanding the denominator:
+
+- $\beta = \frac{Cov(Y,D) - \gamma_1 Cov( X, D)  }{Var(D) + \delta_1^2 Var(X) - 2 \delta_1 Cov(X, D)}$
+
+From here we could do more simplification to reduce future calculation but at this point we can already
+calculate $\beta$. We just need the variances and covariances of the variables.
+
+- $Var(X) = Var(U + V + \epsilon_x) = 3$ (all components of X are independent)
+- $Cov(X,U) = Var(U) = 1 = Cov(X, V)$
+- $Cov(X, D) = Cov(X, X + U + \epsilon_d) = Var(X) + cov(X, U) = 4$
+- $Var(D) = Var(\epsilon_d) + Var(X) + Var(U) + 2 Cov(X,U) = 1+3+1 +2 = 7$
+- $Cov(Y, D) = Cov(D + X + V + \epsilon_y, D) = Var(D) + Cov(X, D) + Cov(V, D) + 0 = 7 + 4 + 1 = 12$
+
+Plugging in:
+```{r}
+var.d <- 7
+var.x <- 3
+cov.xd <- 4
+cov.yd <- 12
+cov.yx <- 8
+gamma <- cov.yx/var.x
+delta <- cov.xd/var.x
+beta <- (cov.yd - gamma * cov.xd) / (var.d + delta * delta * var.x -  2 * delta * cov.xd)
+beta
+```
+
+## Extension to FDC
+
+We can also apply this to a set of structural equations to illustrate how FDC works.
+
+![](dag_fdc.png)
+
+- $U = \epsilon_u$
+- $T = U + \epsilon_t$
+- $M = T + \epsilon_m$
+- $Y = M + U + \epsilon_y$
+
+We can identify the effect of T on M in an unbiased way. This is just the OLS result 
+$\beta_T = 1$
+
+Then we can identify the effect of M on Y controlling for T.
+
+\[ \beta_M = \frac{Cov(\tilde{Y}, \tilde{M})}{Var(\tilde{M})} \]
+\[ = \frac{Cov(Y - \gamma_1 T, \epsilon_m)}{1}  = Cov(Y, \epsilon_m) - Cov(\gamma_1 T, \epsilon_m) \]
+
+$T, \epsilon_m$ independent: 
+
+\[ \beta_M = Cov(T + \epsilon_m + U + \epsilon_y, \epsilon_m) - 0 = 1 \]
+
+The total effect is $1 \cdot 1 = 1$.
+
+# Non Parametric FDC - ATT derivation
+
+Setup: Binary $M$ and $T$. $Y_i$ is a function of $M_i$ which is a function of $T$. So we write $Y_i(M_i(\cdot))$
+
+\[  ATT = \mathbb{E} \left[ Y_i(M_i(1)) \mid T_i = 1 \right] - \mathbb{E} \left[ Y_i(M_i(0)) \mid T_i = 1 \right] \]
+
+Call the first term A and the second term B. 
+
+A is the expected value of Y given $T = 1$ (the observed Y for the treated group). For some people, $M = 0$ even if $T=1$. For these people, we would write $M_i(1) = 0$.
+For other units, $M_i(1) = 1$ which means they are actually treated via the mechanism M.
+We can decompose into these two parts using the law of total probability.
+
+
+\begin{align*}
+    A &= \mathbb{E} \left[ Y_i(1) \mid M_i(1) = 1, T_i = 1 \right] \Pr[M_i(1) = 1 \mid T_i = 1] \\
+    &\quad + \mathbb{E} \left[ Y_i(0) \mid M_i(1) = 0, T_i = 1 \right] \Pr[M_i(1) = 0 \mid T_i = 1] \\
+    &= \mathbb{E} \left[ Y_i \mid M_i = 1, T_i = 1 \right] \Pr[M_i = 1 \mid T_i = 1] \\
+    &\quad + \mathbb{E} \left[ Y_i \mid M_i = 0, T_i = 1 \right] (1 - \Pr[M_i = 1 \mid T_i = 1])
+\end{align*}
+
+Ok. Now B is the counterfactual component. This is the expected value of Y if $T = 0$ **for the units where T is actually 1**.
+However, we can start by doing the same decomposition. 
+For some units, $M_i(0) = 1$ which means that they would have received $M=1$ even if $T$ had been 0 .
+For other units, $M_i(0) = 0$ which means that they would have received $M=0$ even if $T$ had been 0 .
+
+\begin{align*}
+    B &= \mathbb{E} \left[ Y_i(1) \mid M_i(0) = 1, T_i = 1 \right] \Pr[M_i(0) = 1 \mid T_i = 1] \\
+    &\quad + \mathbb{E} \left[ Y_i(0) \mid M_i(0) = 0, T_i = 1 \right] \Pr[M_i(0) = 0 \mid T_i = 1]
+\end{align*}
+
+Now we use our assumptions about FDC setup to get leverage on these counterfactual quantities.
+
+First, the exclusion restriction means that T doesn't affect Y except through M. 
+So the potential outcomes $Y$ for the group $M_i(0) = 1$ are the same for the group where $M_i(1) = 1$.
+So, $\mathbb{E} \left[ Y_i(1) \mid M_i(0) = 1, T_i = 1 \right] = \mathbb{E} \left[ Y_i(1) \mid M_i(1) = 1, T_i = 1 \right]$
+
+Next, the unconfounded assumption means that $\Pr[M_i(0) = 1 \mid T_i = 1] = \Pr[M_i(0) = 1 \mid T_i = 0]$
+
+\begin{align*}
+   B &= \mathbb{E} \left[ Y_i(1) \mid M_i(1) = 1, T_i = 1 \right] \Pr[M_i(0) = 1 \mid T_i = 0] \\
+    &\quad + \mathbb{E} \left[ Y_i(0) \mid M_i(1) = 0, T_i = 1 \right] \Pr[M_i(0) = 0_ \mid T_i = {0}] \\
+    &= \mathbb{E} \left[ Y_i \mid M_i = 1, T_i = 1 \right] \Pr[M_i = 1 \mid T_i = 0] \\
+    &\quad + \mathbb{E} \left[ Y_i \mid M_i = 0, T_i = 1 \right] (1 - \Pr[M_i = 1 \mid T_i = 0]).
+\end{align*}
