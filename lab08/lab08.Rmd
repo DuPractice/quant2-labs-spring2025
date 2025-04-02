@@ -1,0 +1,347 @@
+---
+title: "Quant 2, Week 8 Lab"
+subtitle: "Panel Data and Difference in Differences"
+author: "Sylvan Zheng"
+output: pdf_document
+---
+
+# TWFE Staggered event bias
+
+- TWFE bias with multiple events
+- Go over cyrus' code
+- Introduce packages for staggered treatment and sensitivity analysis
+
+
+```{r}
+pacman::p_load(tidyverse, knitr, fixest)
+pacman::p_load(did, HonestDiD, haven, panelView)
+
+set.seed(123)
+periods <- 5
+N <- 100
+
+# Generate simulation data.
+# D.pat is a vector of length period of the treatment timing
+# YC.pat is a vector of length period of the mean Y for each unit
+# YT.func is a function that returns a vector of length period
+#    of the exact change in Y for each unit
+#    This is a function so that you can include calls to rnorm
+generate_data <- function(N, first.treat, YC.pat, YT.func) {
+    # Fancy code that basically just returns a vector like c(0,0,1,1,1) if first.treat = 3
+    D.pat <- c(rep(0, first.treat - 1), rep(1, periods - first.treat + 1))[1:periods]
+
+    tibble(
+        id = first.treat * N + rep(1:N, each = periods),
+        period = rep(1:periods, N),
+        D = rep(D.pat, N),
+        YC = rep(YC.pat, N) + rnorm(N * periods),
+        YT = YC + (replicate(N, YT.func()) %>% as.vector())
+    ) %>%
+        mutate(
+            Y = if_else(D == 1, YT, YC),
+            first.treat = first.treat
+        )
+}
+
+# Never-treated group.
+dat_U <- generate_data(
+    N,
+    first.treat = 6,
+    YC.pat = c(0, 0, 1, 2, 3),
+    YT.func = \() c(0, 0, 0, 0, 0)
+)
+dat_2 <- generate_data(
+    N,
+    first.treat = 2,
+    YC.pat = 2 + c(0, 0, 1, 2, 3),
+    YT.func = \() c(0, 1, rnorm(1) + 2, rnorm(1) + 4, rnorm(1) + 8)
+)
+dat_5 <- generate_data(
+    N,
+    first.treat = 5,
+    YC.pat = 3 + c(0, 0, 1, 2, 3),
+    YT.func = \() c(0, 0, 0, 0, rnorm(1) + 1)
+)
+
+dat_all <- rbind(dat_U, dat_2, dat_5) %>% mutate(group = as.factor(first.treat))
+
+# Plot the data
+
+# First, the YCs
+dat_all %>% ggplot(aes(x = period, y = YC, color = group)) +
+    geom_point(position = position_jitter(width = 0.1), alpha = 0.6) +
+    stat_summary(fun = mean, geom = "line")
+
+# Then, the Ys
+dat_all %>% ggplot(aes(x = period, y = Y, color = group)) +
+    geom_point(position = position_jitter(width = 0.1), alpha = 0.6) +
+    stat_summary(fun = mean, geom = "line")
+```
+
+## True ATTs
+
+```{r}
+dat_all %>%
+    filter(D == 1) %>%
+    group_by(group, period) %>%
+    summarize(att = mean(YT) - mean(YC)) %>%
+    kable(digits = 2)
+
+dat_all %>%
+    group_by(group, period) %>%
+    summarize(att = mean(YT) - mean(YC)) %>%
+    ggplot(aes(x = period, y = att, color = group, shape = group)) +
+    geom_line() +
+    geom_point()
+
+# Average ATT
+dat_all %>%
+    filter(D == 1) %>%
+    group_by(group, period) %>%
+    summarize(att = mean(YT) - mean(YC)) %>%
+    .$att %>%
+    mean()
+```
+
+## TWFE
+
+```{r}
+twfe <- feols(Y ~ D | id + period, data = dat_all)
+etable(twfe)
+```
+
+## Event by Event
+
+```{r}
+event1.2 <- dat_all %>% filter(
+    group %in% c(2, 6),
+    period %in% c(1, 2)
+)
+event1.3 <- dat_all %>% filter(
+    group %in% c(2, 6),
+    period %in% c(1, 3)
+)
+event1.4 <- dat_all %>% filter(
+    group %in% c(2, 6),
+    period %in% c(1, 4)
+)
+event1.5 <- dat_all %>% filter(
+    group %in% c(2, 6),
+    period %in% c(1, 5)
+)
+event2.5 <- dat_all %>% filter(
+    group %in% c(5, 6),
+    period %in% c(1, 5)
+)
+
+models <- list(
+    feols(Y ~ D | id + period, data = event1.2),
+    feols(Y ~ D | id + period, data = event1.3),
+    feols(Y ~ D | id + period, data = event1.4),
+    feols(Y ~ D | id + period, data = event1.5),
+    feols(Y ~ D | id + period, data = event2.5)
+)
+etable(models)
+# Looks familiar? Compare to the true ATTs
+
+# Each event has an equal number of observations, so the naive mean is fine
+mean(sapply(models, \(m) coef(m)["D"]))
+```
+
+# Tools for estimating with staggered event
+
+## Package fixest: Sun and Abraham (2021)
+
+```{r}
+sa.model <- feols(Y ~ 1 + sunab(first.treat, period) | period + id, data = dat_all, cluster = "id")
+etable(sa.model)
+# Plot the event study
+iplot(sa.model)
+# Get the ATT
+summary(sa.model, agg = "ATT")
+# SE 0.13
+summary(sa.model, agg = "cohort")
+```
+
+## Package did: Callaway and Santa Anna (2021)
+
+```{r}
+out <- att_gt(
+    yname = "Y",
+    gname = "first.treat",
+    idname = "id",
+    tname = "period",
+    xformla = ~1, # if you had covariates for conditional parallel trends, put here
+    data = dat_all,
+    est_method = "reg"
+)
+summary(out)
+ggdid(out)
+ggdid(aggte(out, type = "dynamic"))
+summary(aggte(out, type = "simple"))
+summary(aggte(out, type = "group"))
+```
+
+# Application
+
+```{r}
+df <- read_dta("https://raw.githubusercontent.com/Mixtape-Sessions/Advanced-DID/main/Exercises/Data/ehec_data.dta")
+data(mpdta)
+
+head(mpdta)
+# county-year panel
+# lemp: log employment
+# lpop: log population
+# first.treat: year of minimum wage increase
+mpdta$first.treat %>% table(useNA = "ifany")
+mpdta$year %>% table(useNA = "ifany")
+
+## Panelview
+mpdta <- mpdta %>% mutate(
+    D = case_when(
+        first.treat == 0 ~ 0,
+        TRUE ~ first.treat <= year
+    ),
+    ftsa = case_when(
+        first.treat == 0 ~ 9999,
+        T ~ first.treat
+    ),
+    treat = first.treat != 0
+)
+panelview(mpdta, Y = "lemp", D = "D", index = c("countyreal", "year"))
+```
+
+## Estimate effects
+
+```{r}
+# Estimate effects for the following specifications:
+
+# 1. TWFE comparing the 2006 cohort to the never-treated cohort
+# 2. Sun Ab
+# 3. Callaway and Sant'anna
+# 4. Callaway and Sant'anna incorporating lpop as a covariate
+
+```
+
+## Incorporate Covariates
+
+```{r}
+# Sun Ab
+sa.model <- feols(lemp ~ sunab(ftsa, year) | countyreal + year, data = mpdta)
+ggiplot(sa.model)
+# CS
+cs.model <- att_gt(
+    yname = "lemp",
+    gname = "first.treat",
+    idname = "countyreal",
+    tname = "year",
+    xformla = ~lpop,
+    data = mpdta,
+    est_method = "reg"
+)
+ggdid(aggte(cs.model, type = "dynamic"))
+```
+
+## Sensitivity analysis: HonestDiD
+
+### TWFE
+
+```{r}
+betahat <- summary(twfe)$coefficients # save the coefficients
+sigma <- summary(twfe)$cov.scaled # save the covariance matrix
+delta_rm_results <-
+    createSensitivityResults_relativeMagnitudes(
+        betahat = betahat, # coefficients
+        sigma = sigma, # covariance matrix
+        numPrePeriods = 3, # num. of pre-treatment coefs
+        numPostPeriods = 1, # num. of post-treatment coefs
+        Mbarvec = seq(0.5, 2, by = 0.5) # values of Mbar
+    )
+delta_rm_results
+originalResults <- constructOriginalCS(
+    betahat = betahat,
+    sigma = sigma,
+    numPrePeriods = 3,
+    numPostPeriods = 1
+)
+createSensitivityPlot_relativeMagnitudes(delta_rm_results, originalResults)
+```
+
+### Staggered adoption and honest DiD
+
+```{r}
+# Load these functions because HonestDiD and SunAb/CallawaySantanna are not well integrated
+source(here::here("lab08/honest-helpers.R"))
+```
+
+#### SunAb
+
+```{r}
+svcv <- sunab_beta_vcv(sa.model)
+betahat <- svcv$beta
+sigma <- svcv$sigma
+delta_rm_results <-
+    createSensitivityResults_relativeMagnitudes(
+        betahat = betahat,
+        sigma = sigma,
+        numPrePeriods = 3,
+        numPostPeriods = 4,
+        Mbarvec = seq(0.5, 2, by = 0.5)
+    )
+originalResults <- constructOriginalCS(
+    betahat = betahat,
+    sigma = sigma,
+    numPrePeriods = 3,
+    numPostPeriods = 4
+)
+createSensitivityPlot_relativeMagnitudes(delta_rm_results, originalResults)
+
+# Honest DiD default does this for the first period. But what if we are interested in all the effects?
+
+delta_rm_results <-
+    createSensitivityResults_relativeMagnitudes(
+        betahat = betahat,
+        sigma = sigma,
+        numPrePeriods = 3,
+        numPostPeriods = 4,
+        Mbarvec = seq(0.5, 2, by = 0.5),
+        l_vec = c(0.25, 0.25, 0.25, 0.25)
+    )
+originalResults <- constructOriginalCS(
+    betahat = betahat,
+    sigma = sigma,
+    numPrePeriods = 3,
+    numPostPeriods = 4,
+    l_vec = c(0.25, 0.25, 0.25, 0.25)
+)
+createSensitivityPlot_relativeMagnitudes(delta_rm_results, originalResults)
+```
+
+### Callaway Sant'anna
+
+```{r}
+# Need to specify the "universal" type base period to use honestDiD
+cs.model <- att_gt(
+    yname = "lemp",
+    gname = "first.treat",
+    idname = "countyreal",
+    tname = "year",
+    xformla = ~lpop,
+    data = mpdta,
+    est_method = "reg",
+    base_period = "universal"
+)
+ggdid(aggte(cs.model, type = "dynamic"))
+
+# The helper code automatically does the entire post periods. No l_vec here
+sensitivity_results <-
+    honest_did(aggte(cs.model, type = "dynamic"),
+        e = 0,
+        type = "relative_magnitude",
+        Mbarvec = seq(from = 0.5, to = 2, by = 0.5)
+    )
+createSensitivityPlot_relativeMagnitudes(
+    sensitivity_results$robust_ci,
+    sensitivity_results$orig_ci
+)
+```
