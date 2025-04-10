@@ -1,0 +1,143 @@
+---
+title: "Quant 2, Week 9"
+subtitle: "Panel Imputation Methods"
+author: "Sylvan Zheng"
+---
+
+```{r}
+pacman::p_load(fect, panelView, tidyverse)
+devtools::install_github("ebenmichael/augsynth")
+devtools::install_github("chadhazlett/kbal")
+devtools::install_github("xuyiqing/tjbal")
+library(augsynth)
+library(tjbal)
+data(fect)
+# Turnout dataset
+# EDR = election-day registration policy
+head(turnout)
+panelview(turnout, index = c("abb", "year"), Y = "turnout", D = "policy_edr")
+panelview(simdata1, index = c("id", "time"), Y = "Y", D = "D")
+```
+
+## TWFE Imputation (fe)
+
+- Borusyak, Jaravel & Spiess (2024)
+- Model is fit only to pre-treatment and control data and then
+used to impute Y0s.
+
+### Implementation by hand with fixest
+
+```{r}
+library(fixest)
+modl <- feols(Y ~ X1 + X2 | id + time, data = simdata1 %>% filter(D == 0))
+simdata1$y0.impute <- predict(modl, newdata = simdata1)
+treated <- simdata1 %>% filter(D == 1)
+att <- mean(treated$Y) - mean(treated$y0.impute)
+att
+```
+
+### Implementation using fect package
+
+```{r}
+fe <- fect(
+    Y ~ D,
+    index = c("id", "time"),
+    data = simdata1,
+    method = "fe",
+    se = T,
+)
+plot(fe)
+print(fe)
+
+# With covariates
+fe.cov <- fect(
+    Y ~ D + X1 + X2,
+    index = c("id", "time"),
+    data = simdata1,
+    method = "fe",
+    se = T,
+)
+plot(fe.cov)
+print(fe.cov)
+```
+
+## Interactive FE
+
+- Basic idea: instead of simple two way fixed effects to model Y0, do something more sophisticated.
+- Choose some low value r (usually r < 5)
+- Model r latent factors 
+- Say we have 5 units, 3 periods, and 2 factors
+- TWFE: Y0 ~ i1 + i2 + i3 + i4 + i5 + t1 + t2 + t3
+- IFE: Y0 ~ (r1 + r2)*(i1 + i3 + i4 + i5) + (r1 + r2)*(t1 + t2 + t3)
+
+```{r}
+ife <- fect(
+    Y ~ D + X1 + X2,
+    index = c("id", "time"),
+    data = simdata1,
+    method = "ife",
+    CV = TRUE,
+    r = c(0, 5),
+    se = T,
+)
+plot(ife)
+print(ife)
+```
+
+### Matrix Completion
+
+```{r}
+mc <- fect(
+    Y ~ D + X1 + X2,
+    index = c("id", "time"),
+    data = simdata1,
+    method = "mc",
+    CV = TRUE,
+    se = T,
+)
+plot(mc)
+print(mc)
+```
+
+### Generalized Synthetic Control (gsynth)
+
+```{r}
+gsynth <- fect(
+    Y ~ D + X1 + X2,
+    index = c("id", "time"),
+    data = simdata1,
+    method = "gsynth",
+    se = T,
+    r = c(0, 5),
+    CV = T
+)
+plot(gsynth)
+print(gsynth)
+```
+
+- Gsynth: designed to handle block and staggered DID settings without treatment reversal, whereas other methods allow for treatment reversal under the assumption of limited carryover effects.
+- Gsynth: particularly suited for cases where the number of treated units is small, including scenarios with only one treated unit. In contrast, other methods rely on large samples, particularly a large number of treated units, to obtain reliable standard errors and confidence intervals 
+- Compared with IFEct (method = "ife"), Gsynth does not rely on pre-treatment data from the treated units to impute. This approach significantly speeds up computation and improves stability.
+- Therefore, we recommend setting method = "gsynth" in fect for scenarios where the treatment does not reverse (or is coded accordingly) and the number of treated units is small .
+
+
+## Augmented Synthetic Control (augsynth)
+
+```{r}
+asyn <- augsynth(Y ~ D | X1 + X2, id, time, simdata1)
+print(asyn$nu)
+asyn.summ <- summary(asyn)
+plot(asyn.summ, levels = "Average")
+```
+
+## Trajectory Balancing
+
+```{r}
+out.tjbal <- tjbal(Y ~ D,
+    data = simdata1,
+    index = c("id", "time"), Y.match.npre = 0,
+    demean = TRUE, vce = "boot", nsims = 200,
+)
+print(out.tjbal)
+plot(out.tjbal)
+```
