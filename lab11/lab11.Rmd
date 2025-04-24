@@ -33,10 +33,12 @@ declaration_18.1 <-
     declare_estimator(Y ~ Z, inquiry = "ATE")
 
 dd <- diagnose_design(declaration_18.1)
+dd
 dd$simulations_df %>% head()
 hist(dd$simulations_df$estimate)
 hist(dd$simulations_df$p.value)
-sum(dd$simulations_df$p.value > 0.05) / 500
+# Power
+sum(dd$simulations_df$p.value <= 0.05) / 500
 ```
 
 ## `redesign`: Evaluating Multiple Designs
@@ -109,7 +111,7 @@ rdd <- declaration_18.2 %>%
     ) %>%
     diagnose_designs(bootstrap_sims = 0)
 
-
+rdd$duration
 rdd$diagnosands_df %>% ggplot(aes(x = N, y = power, color = as.factor(r_sq))) +
     geom_line(linewidth = 2) +
     labs(color = "Rsq")
@@ -159,36 +161,63 @@ dd.lin$diagnosands_df %>% ggplot(aes(x = prob, y = sd_estimate, color = estimato
 ## Block Randomization
 
 ```{r}
-declaration_18.4a <-
+tau <- 0.2
+coef <- 2
+
+block.m <-
     declare_model(
         N = N,
         gender = sample(size = N, c(0, 1), replace = T),
         U = rnorm(N, sd = 1),
-        potential_outcomes(Y ~ 0.2 * Z + gender + U)
+        potential_outcomes(Y ~ tau * Z + coef * gender + U)
     ) +
     declare_assignment(
         Z = block_ra(blocks = gender),
-        # Z = complete_ra(N = N, prob = 0.5),
-        # Z = simple_racomplete_ra(N = N, prob = 0.5),
     ) +
     declare_measurement(Y = reveal_outcomes(Y ~ Z)) +
+    declare_estimator(Y ~ Z, label = "DIM") +
     declare_estimator(
         Y ~ Z,
         covariates = ~gender,
         .method = lm_lin,
         label = "Lin"
     )
-dd <- diagnose_design(declaration_18.4a)
-dd$diagnosands_df
-dd$simulations_df %>% head()
+simple.m <-
+    declare_model(
+        N = N,
+        gender = sample(size = N, c(0, 1), replace = T),
+        U = rnorm(N, sd = 1),
+        potential_outcomes(Y ~ tau * Z + coef * gender + U)
+    ) +
+    declare_assignment(
+        Z = simple_ra(N = N, prob = 0.5),
+    ) +
+    declare_measurement(Y = reveal_outcomes(Y ~ Z)) +
+    declare_estimator(Y ~ Z, label = "DIM") +
+    declare_estimator(
+        Y ~ Z,
+        covariates = ~gender,
+        .method = lm_lin,
+        label = "Lin"
+    )
+dd.block <- block.m %>%
+    redesign(
+        N = seq(40, 200, 20),
+        coef = c(0.5, 1, 2, 4)
+    ) %>%
+    diagnose_designs()
+dd.simple <- simple.m %>%
+    redesign(
+        N = seq(40, 200, 20),
+        coef = c(0.5, 1, 2, 4)
+    ) %>%
+    diagnose_designs()
+rbind(
+    dd.block$diagnosands_df %>% mutate(method = "block"),
+    dd.simple$diagnosands_df %>% mutate(method = "simple")
+) %>% ggplot(aes(x = N, y = power, color = method)) +
+    facet_wrap(~ estimator + coef) +
+    geom_line()
 ```
 
-
-Activity:
-
-Compare block randomization to complete or simple randomization while varying 1 or more of the following dimensions:
-- Sample size
-- Treatment effect
-- Magnitude of gender effect on the outcome
-- Adding in other covariates 
 
