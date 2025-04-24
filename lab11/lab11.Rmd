@@ -36,6 +36,8 @@ dd <- diagnose_design(declaration_18.1)
 dd$simulations_df %>% head()
 hist(dd$simulations_df$estimate)
 hist(dd$simulations_df$p.value)
+
+## power, usually the benchmark is 80%. the power of design, to what extent the p-value of estimand is over 95%.
 sum(dd$simulations_df$p.value > 0.05) / 500
 ```
 
