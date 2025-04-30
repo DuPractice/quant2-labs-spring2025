@@ -1,0 +1,77 @@
+---
+title: "Quant 2, Lab 12"
+subtitle: "Multiple Hypothesis Testing"
+author: "Sylvan Zheng"
+---
+
+# 1 
+
+```{r}
+source("dgp.R")
+df <- make_data(seed = 12345)
+head(df)
+models <- analyze(df)
+etable(models)
+```
+
+The DGP is coded such that some outcome variables have a very weak relationship to X1, and some outcome variables have a somewhat larger relationship.
+
+Which variables are which? What is the mean effect of X1 for each variable?
+
+# 2
+
+The following function generates some data, creates a set of fixest models,
+and extracts the naive p values, the Romano-Wolf adjusted p-values, and the 
+Bonferroni corrected p-values.
+
+Look at the p-values returned by this function. 
+
+How many tests returned a "significant" coefficient on X1 when they shouldn't have?
+
+How many tests returned an "insignficant" coefficient on X1 when they shouldn't have?
+
+Add at least one other adjustment strategy (holm, fdr, hochberg, etc.) and re-run the results.
+
+```{r}
+get_pvalues <- function(models) {
+    results <- lapply(models, tidy) %>%
+        bind_rows() %>%
+        filter(term == "X1") %>%
+        mutate(Y = 1:20)
+
+    rwolf <- rwolf(models = models, param = "X1", B = 999)$`RW Pr(>|t|)`
+    bonf <- p.adjust(results$p.value, method = "bonferroni")
+
+    p.values <- list(
+        "raw" = results$p.value,
+        "bonf" = bonf,
+        "rwolf" = rwolf
+    )
+    p.values
+}
+```
+
+# 3
+
+Write a simulation that repeatedly draws new data from the DGP and calculates the p.values with multiple strategies. Then, based on the simulation results, calculate the following three quantities of interest:
+
+1. FDR - the false discovery rate. We can estimate this using the total number of significant results (that shouldn't be significant) divided by the total number of significant findings 
+2. FWER - the family-wise error rate. This is related to the FDR, but is slightly different. If we consider one set of fixest models as a single "family," the FWER is the probability that we have at least one false discovery. 
+3. Power - we saw this last week in the context of experimental design. This is the probability of observing a significant effect given that there is one to discover.
+
+Note each adjustment strategy has different trade-offs between these three quantities. Discuss the implications.
+
+```{r}
+# Conduct simulation here...
+```
+
+# 4
+
+General overview of control methods. More conservative means less likely to make FDRs at the expense of power. In order of conservative-ness
+
+- Bonferroni (most conservative). Just divide the p-values by the number of tests. Intuitive.
+- Hochberg (step-up). Order p-values from largest to smallest. The k-th p-value is significant if it's less than 0.05 / k. All smaller p-values are also considered significant. Valid for the FWER if outcomes are independent.
+- Holm (step-down). Order p-values from smallest to largest. The k-th p-value is insignficant if it's greater than 0.05 / (n - k + 1). All larger p-values are insignficant. Valid for the FWER under any dependency structure
+- Romano-Wolf, based on bootstrapping. More powerful than Holm/Hochberg while still able to control FWER. Current standard as of 2025.
+- Benjamini and Hochberg. Valid for FDR under independent outcomes
+- Benjamini and Yekutieli. Valid for FDR under any dependency structure.
