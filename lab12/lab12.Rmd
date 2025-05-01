@@ -10,6 +10,7 @@ author: "Sylvan Zheng"
 source("dgp.R")
 df <- make_data(seed = 12345)
 head(df)
+library(fixest)
 models <- analyze(df)
 etable(models)
 ```
@@ -49,6 +50,10 @@ get_pvalues <- function(models) {
     )
     p.values
 }
+# devtools::install_github("s3alfisc/fwildclusterboot")
+# devtools::install_github("s3alfisc/wildrwolf")
+pacman::p_load(fixest, wildrwolf, broom, tidyverse)
+p.values <- get_pvalues(models)
 ```
 
 # 3
