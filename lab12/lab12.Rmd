@@ -68,6 +68,12 @@ Write a simulation that repeatedly draws new data from the DGP and calculates th
 Note each adjustment strategy has different trade-offs between these three quantities. Discuss the implications.
 
 ```{r}
+# You can get sharpened anderson q-values using this code snippet:
+source(here('anderson-q.R'))
+get_anderson_qvalues(p.values$raw)
+```
+
+```{r}
 # Conduct simulation here...
 ```
 
