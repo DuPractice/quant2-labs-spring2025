@@ -7,10 +7,10 @@ author: "Sylvan Zheng"
 # 1 
 
 ```{r}
+library(fixest)
 source("dgp.R")
 df <- make_data(seed = 12345)
 head(df)
-library(fixest)
 models <- analyze(df)
 etable(models)
 ```
@@ -52,16 +52,17 @@ get_pvalues <- function(models) {
 }
 # devtools::install_github("s3alfisc/fwildclusterboot")
 # devtools::install_github("s3alfisc/wildrwolf")
-pacman::p_load(fixest, wildrwolf, broom, tidyverse)
+pacman::p_load(fixest, wildrwolf, broom, tidyverse, knitr)
 p.values <- get_pvalues(models)
+as_tibble(p.values) %>% kable(digits=2)
 ```
 
 # 3
 
-Write a simulation that repeatedly draws new data from the DGP and calculates the p.values with multiple strategies. Then, based on the simulation results, calculate the following three quantities of interest:
+Write a simulation that repeatedly draws new data from the DGP and calculates the p.values with multiple strategies. Then, based on the simulation results, calculate the following three quantities of interest for each adjustment strategy (including unadjusted/raw):
 
 1. FDR - the false discovery rate. We can estimate this using the total number of significant results (that shouldn't be significant) divided by the total number of significant findings 
-2. FWER - the family-wise error rate. This is related to the FDR, but is slightly different. If we consider one set of fixest models as a single "family," the FWER is the probability that we have at least one false discovery. 
+2. FWER - the family-wise error rate. This is related to the FDR, but is slightly different. If we consider one set of 20 models as a single "family," the FWER is the probability that we have at least one false discovery among these 20. 
 3. Power - we saw this last week in the context of experimental design. This is the probability of observing a significant effect given that there is one to discover.
 
 Note each adjustment strategy has different trade-offs between these three quantities. Discuss the implications.
